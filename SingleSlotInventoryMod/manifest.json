@@ -1,0 +1,10 @@
+{
+  "Name": "Miihau Event Helper",
+  "Author": "Miihau",
+  "Version": "0.0.2",
+  "Description": "Adds custom event commands for firefly effects.",
+  "UniqueID": "MiihauEventHelper",
+  "EntryDll": "MiihauEventHelper.dll",
+  "MinimumApiVersion": "4.0.0",
+  "UpdateKeys": []
+}
