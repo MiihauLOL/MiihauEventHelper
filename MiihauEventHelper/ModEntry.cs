@@ -28,10 +28,10 @@ namespace MiihauEventHelper
 
         /// <summary>
         ///     Usage:
-        ///     action {{ModId}}_SpawnFirefly <tileX> <tileY> [durationMs] [baseRadius] [pulseAmplitude] [pulseSpeed] [color] [movementSpeed] [fireflyId]
+        ///     action {{ModId}}_SpawnFirefly <tileX> <tileY> [durationMs] [baseRadius] [pulseAmplitude] [pulseSpeed] [color] [movementSpeed] [fadeInDurationMs] [fireflyId]
         ///
         ///     Example:
-        ///     action Miihau.EventHelper_SpawnFirefly 6 7 5000 0.9 0.1 0.3 #FF4938 15 introGlow
+        ///     action Miihau.EventHelper_SpawnFirefly 6 7 5000 0.9 0.1 0.3 #FF4938 15 3000 introGlow
         /// 
         ///     Then later:
         ///     action Miihau.EventHelper_RemoveFireFly introGlow
@@ -44,7 +44,7 @@ namespace MiihauEventHelper
             {
                 if (args.Length < 3)
                 {
-                    error = "Not enough arguments. Usage: <tileX> <tileY> [durationMs] [baseRadius] [pulseAmplitude] [pulseSpeed] [color] [movementSpeed] [fireflyId]";
+                    error = "Not enough arguments. Usage: <tileX> <tileY> [durationMs] [baseRadius] [pulseAmplitude] [pulseSpeed] [color] [movementSpeed] [fadeInDurationMs] [fireflyId]";
                     return false;
                 }
 
@@ -87,9 +87,19 @@ namespace MiihauEventHelper
                 if (args.Length >= 9 && !string.IsNullOrWhiteSpace(args[8]))
                     float.TryParse(args[8], out movementSpeed);
 
+                int fadeInDurationMs = 0;
                 string? fireflyId = null;
+
                 if (args.Length >= 10 && !string.IsNullOrWhiteSpace(args[9]))
-                    fireflyId = args[9].Trim();
+                {
+                    // old format: arg 9 was fireflyId
+                    // new format: arg 9 can be fadeInDurationMs
+                    if (!int.TryParse(args[9], out fadeInDurationMs))
+                        fireflyId = args[9].Trim();
+                }
+
+                if (args.Length >= 11 && !string.IsNullOrWhiteSpace(args[10]))
+                    fireflyId = args[10].Trim();
 
                 float xPix = tileX * Game1.tileSize + Game1.tileSize / 2f;
                 float yPix = tileY * Game1.tileSize + Game1.tileSize / 2f;
@@ -104,6 +114,7 @@ namespace MiihauEventHelper
                     pulseSpeed: pulseSpeed,
                     color: color,
                     movementSpeed: movementSpeed,
+                    fadeInDurationMs: fadeInDurationMs,
                     customId: fireflyId
                 );
 
@@ -133,7 +144,7 @@ namespace MiihauEventHelper
 
         /// <summary>
         ///     Usage:
-        ///     action {{ModId}}_RemoveFireFly <id>
+        ///     action {{ModId}}_RemoveFireFly <id> [fadeOutDurationMs]
         /// </summary>
         private bool RemoveFireflyLight(string[] args, TriggerActionContext context, out string error)
         {
@@ -143,7 +154,7 @@ namespace MiihauEventHelper
             {
                 if (args.Length < 2 || string.IsNullOrWhiteSpace(args[1]))
                 {
-                    error = "Missing firefly ID. Usage: <id>";
+                    error = "Missing firefly ID. Usage: <id> [fadeOutDurationMs]";
                     return false;
                 }
 
@@ -155,8 +166,20 @@ namespace MiihauEventHelper
                     return false;
                 }
 
-                effect.Remove();
-                this.activeEffects.Remove(id);
+                int fadeOutDurationMs = 0;
+                if (args.Length >= 3 && !string.IsNullOrWhiteSpace(args[2]))
+                    int.TryParse(args[2], out fadeOutDurationMs);
+
+                if (fadeOutDurationMs > 0)
+                {
+                    effect.Remove(fadeOutDurationMs);
+                }
+                else
+                {
+                    effect.Remove();
+                    this.activeEffects.Remove(id);
+                }
+
                 return true;
             }
             catch (Exception ex)

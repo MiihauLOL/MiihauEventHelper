@@ -21,6 +21,11 @@ namespace MiihauEventHelper
         private float x;
         private float y;
         private int startTimeMs;
+        private readonly int fadeInDurationMs;
+
+        private bool isFadingOut;
+        private int fadeOutDurationMs;
+        private int fadeOutStartTimeMs;
 
         private readonly string lightId;
         public string Id { get; }
@@ -30,6 +35,7 @@ namespace MiihauEventHelper
         private float targetVelocityX;
         private float targetVelocityY;
         private float directionChangeTimer;
+        
 
         public FireflyEffect(
             string modUniqueId,
@@ -41,6 +47,7 @@ namespace MiihauEventHelper
             float pulseSpeed,
             Color color,
             float movementSpeed,
+            int fadeInDurationMs = 0,
             string? customId = null)
         {
             this.x = xPix;
@@ -51,6 +58,7 @@ namespace MiihauEventHelper
             this.pulseSpeed = pulseSpeed;
             this.color = color;
             this.movementSpeed = movementSpeed;
+            this.fadeInDurationMs = Math.Max(0, fadeInDurationMs);
 
             this.Id = string.IsNullOrWhiteSpace(customId)
                 ? Guid.NewGuid().ToString("N")
@@ -66,7 +74,9 @@ namespace MiihauEventHelper
 
             Vector2 pos = new Vector2(this.x, this.y);
 
-            this.light = new LightSource(this.lightId, 4, pos, this.baseRadius);
+            float initialFade = this.fadeInDurationMs > 0 ? 0f : 1f;
+
+            this.light = new LightSource(this.lightId, 4, pos, this.baseRadius * initialFade);
             this.light.color.Value = this.color;
             Game1.currentLightSources[this.lightId] = this.light;
 
@@ -87,7 +97,8 @@ namespace MiihauEventHelper
                 rotationChange = 0f,
                 color = this.color,
                 alphaFade = 0f,
-                layerDepth = 1f
+                layerDepth = 1f,
+                alpha = initialFade
             };
 
             this.location.TemporarySprites.Add(this.sprite);
@@ -95,14 +106,34 @@ namespace MiihauEventHelper
 
         public bool Update(GameTime time)
         {
-            int elapsedMs = Environment.TickCount - this.startTimeMs;
+            int nowMs = Environment.TickCount;
+            int elapsedMs = nowMs - this.startTimeMs;
 
-            if (this.durationMs > 0 && elapsedMs >= this.durationMs)
+            if (!this.isFadingOut && this.durationMs > 0 && elapsedMs >= this.durationMs)
                 return false;
+
+            float fadeInFactor = 1f;
+            if (this.fadeInDurationMs > 0)
+                fadeInFactor = Math.Min(1f, elapsedMs / (float)this.fadeInDurationMs);
+
+            float fadeOutFactor = 1f;
+            if (this.isFadingOut)
+            {
+                int fadeOutElapsedMs = nowMs - this.fadeOutStartTimeMs;
+
+                if (fadeOutElapsedMs >= this.fadeOutDurationMs)
+                    return false;
+
+                fadeOutFactor = 1f - (fadeOutElapsedMs / (float)this.fadeOutDurationMs);
+            }
+
+            float visibility = fadeInFactor * fadeOutFactor;
 
             float t = elapsedMs / 1000f;
             float pulseFactor = 1f + this.amplitude * (float)Math.Sin(2f * Math.PI * this.pulseSpeed * t);
-            this.light.radius.Value = this.baseRadius * pulseFactor;
+
+            this.light.radius.Value = this.baseRadius * pulseFactor * visibility;
+            this.sprite.alpha = visibility;
 
             float dt = (float)time.ElapsedGameTime.TotalSeconds;
 
@@ -127,8 +158,26 @@ namespace MiihauEventHelper
 
             return true;
         }
+        public void Remove(int fadeOutDurationMs = 0)
+        {
+            if (this.location == null)
+                return;
 
-        public void Remove()
+            if (fadeOutDurationMs <= 0)
+            {
+                this.RemoveNow();
+                return;
+            }
+
+            if (this.isFadingOut)
+                return;
+
+            this.isFadingOut = true;
+            this.fadeOutDurationMs = fadeOutDurationMs;
+            this.fadeOutStartTimeMs = Environment.TickCount;
+        }
+
+        private void RemoveNow()
         {
             if (this.location != null)
             {
