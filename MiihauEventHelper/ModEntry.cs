@@ -1,7 +1,9 @@
 ﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using StardewValley.Characters;
 using StardewValley.Delegates;
 using StardewValley.Locations;
 using StardewValley.Triggers;
@@ -16,14 +18,18 @@ namespace MiihauEventHelper
     public class EventHelperMod : Mod
     {
         private readonly Dictionary<string, FireflyEffect> activeEffects = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<CustomEmoteBubble> activeCustomEmotes = new();
         private Event? lastEvent;
+        private Texture2D? bubbleTexture;
 
         public override void Entry(IModHelper helper)
         {
             TriggerActionManager.RegisterAction($"{this.ModManifest.UniqueID}_SpawnFirefly", this.SpawnFireflyLight);
             TriggerActionManager.RegisterAction($"{this.ModManifest.UniqueID}_RemoveFireFly", this.RemoveFireflyLight);
+            TriggerActionManager.RegisterAction($"{this.ModManifest.UniqueID}_CustomEmote", this.ShowCustomEmote);
 
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
+            helper.Events.Display.RenderedWorld += this.OnRenderedWorld;
         }
 
         /// <summary>
@@ -31,10 +37,10 @@ namespace MiihauEventHelper
         ///     action {{ModId}}_SpawnFirefly <tileX> <tileY> [durationMs] [baseRadius] [pulseAmplitude] [pulseSpeed] [color] [movementSpeed] [fadeInDurationMs] [fireflyId]
         ///
         ///     Example:
-        ///     action Miihau.EventHelper_SpawnFirefly 6 7 5000 0.9 0.1 0.3 #FF4938 15 3000 introGlow
+        ///     action MiihauEventHelper_SpawnFirefly 6 7 5000 0.9 0.1 0.3 #FF4938 15 3000 introGlow
         /// 
         ///     Then later:
-        ///     action Miihau.EventHelper_RemoveFireFly introGlow
+        ///     action MiihauEventHelper_RemoveFireFly introGlow
         /// </summary>
         private bool SpawnFireflyLight(string[] args, TriggerActionContext context, out string error)
         {
@@ -144,6 +150,74 @@ namespace MiihauEventHelper
 
         /// <summary>
         ///     Usage:
+        ///     action {{ModId}}_CustomEmote <actor> <PathToSpriteFile> <XposInSprite> <YposInSprite> <width> <height>
+        ///
+        ///     Example:
+        ///     action MiihauEventHelper_CustomEmote Abigail LooseSprites\Cursors 0 0 10 9
+        /// </summary>
+        private bool ShowCustomEmote(string[] args, TriggerActionContext context, out string error)
+        {
+            error = null;
+
+            try
+            {
+                if (args.Length < 7)
+                {
+                    error = "Not enough arguments. Usage: <actor> <PathToSpriteFile> <XposInSprite> <YposInSprite> <width> <height>";
+                    return false;
+                }
+
+                string actorName = args[1].Trim();
+                string assetName = this.NormalizeAssetName(args[2]);
+
+                if (!int.TryParse(args[3], out int sourceX)
+                    || !int.TryParse(args[4], out int sourceY)
+                    || !int.TryParse(args[5], out int sourceWidth)
+                    || !int.TryParse(args[6], out int sourceHeight))
+                {
+                    error = "Invalid source rectangle. X, Y, width, and height must all be integers.";
+                    return false;
+                }
+
+                if (sourceWidth <= 0 || sourceHeight <= 0)
+                {
+                    error = "Width and height must be greater than zero.";
+                    return false;
+                }
+
+                Character? actor = this.ResolveActor(actorName);
+                if (actor == null)
+                {
+                    error = $"Couldn't find an actor named '{actorName}'.";
+                    return false;
+                }
+
+                Texture2D iconTexture = Game1.content.Load<Texture2D>(assetName);
+                Rectangle sourceRect = new Rectangle(sourceX, sourceY, sourceWidth, sourceHeight);
+
+                if (sourceRect.Right > iconTexture.Width || sourceRect.Bottom > iconTexture.Height)
+                {
+                    error = $"The source rectangle {sourceRect} is outside the texture bounds {iconTexture.Width}x{iconTexture.Height}.";
+                    return false;
+                }
+
+                int emoteYOffset = 0;
+                if (args.Length >= 8 && !string.IsNullOrWhiteSpace(args[7]))
+                    int.TryParse(args[7], out emoteYOffset);
+
+                this.activeCustomEmotes.Add(new CustomEmoteBubble(actor, this.GetBubbleTexture(), iconTexture, sourceRect, emoteYOffset));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.ToString();
+                this.Monitor.Log($"Error in ShowCustomEmote: {ex}", LogLevel.Error);
+                return false;
+            }
+        }
+
+        /// <summary>
+        ///     Usage:
         ///     action {{ModId}}_RemoveFireFly <id> [fadeOutDurationMs]
         /// </summary>
         private bool RemoveFireflyLight(string[] args, TriggerActionContext context, out string error)
@@ -196,7 +270,10 @@ namespace MiihauEventHelper
                 return;
 
             if (this.lastEvent != null && Game1.CurrentEvent == null)
+            {
                 this.RemoveAllEffects();
+                this.activeCustomEmotes.Clear();
+            }
 
             this.lastEvent = Game1.CurrentEvent;
 
@@ -222,6 +299,24 @@ namespace MiihauEventHelper
                     }
                 }
             }
+
+            if (this.activeCustomEmotes.Count > 0)
+            {
+                for (int i = this.activeCustomEmotes.Count - 1; i >= 0; i--)
+                {
+                    if (!this.activeCustomEmotes[i].Update(Game1.currentGameTime))
+                        this.activeCustomEmotes.RemoveAt(i);
+                }
+            }
+        }
+
+        private void OnRenderedWorld(object? sender, RenderedWorldEventArgs e)
+        {
+            if (!Context.IsWorldReady || this.activeCustomEmotes.Count == 0)
+                return;
+
+            foreach (CustomEmoteBubble bubble in this.activeCustomEmotes)
+                bubble.Draw(Game1.spriteBatch);
         }
 
         private void RemoveAllEffects()
@@ -230,6 +325,65 @@ namespace MiihauEventHelper
                 effect.Remove();
 
             this.activeEffects.Clear();
+        }
+
+        private Texture2D GetBubbleTexture()
+        {
+            this.bubbleTexture ??= this.Helper.ModContent.Load<Texture2D>("assets/Bubbles.png");
+            return this.bubbleTexture;
+        }
+
+        private Character? ResolveActor(string actorName)
+        {
+            if (string.IsNullOrWhiteSpace(actorName))
+                return null;
+
+            if (string.Equals(actorName, "farmer", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(actorName, Game1.player.Name, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(actorName, Game1.player.displayName, StringComparison.OrdinalIgnoreCase))
+            {
+                return Game1.player;
+            }
+
+            if (Game1.CurrentEvent?.actors != null)
+            {
+                foreach (NPC npc in Game1.CurrentEvent.actors)
+                {
+                    if (this.IsMatchingActorName(npc, actorName))
+                        return npc;
+                }
+            }
+
+            if (Game1.currentLocation?.characters != null)
+            {
+                foreach (NPC npc in Game1.currentLocation.characters)
+                {
+                    if (this.IsMatchingActorName(npc, actorName))
+                        return npc;
+                }
+            }
+
+            NPC? globalNpc = Game1.getCharacterFromName(actorName, false);
+            if (globalNpc != null)
+                return globalNpc;
+
+            return null;
+        }
+
+        private bool IsMatchingActorName(NPC npc, string actorName)
+        {
+            return string.Equals(npc.Name, actorName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(npc.displayName, actorName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private string NormalizeAssetName(string assetName)
+        {
+            string normalized = assetName.Trim();
+
+            if (normalized.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                normalized = normalized.Substring(0, normalized.Length - 4);
+
+            return normalized.Replace('/', '\\');
         }
 
         private Color ParseColor(string value)
@@ -259,6 +413,4 @@ namespace MiihauEventHelper
             throw new ArgumentException("Unknown color format.");
         }
     }
-
-
 }
