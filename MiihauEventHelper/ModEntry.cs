@@ -150,10 +150,10 @@ namespace MiihauEventHelper
 
         /// <summary>
         ///     Usage:
-        ///     action {{ModId}}_CustomEmote <actor> <PathToSpriteFile> <XposInSprite> <YposInSprite> <width> <height>
+        ///     action {{ModId}}_CustomEmote <actor> <PathToSpriteFile> <XposInSprite> <YposInSprite> <width> <height> [YOffset = 0]
         ///
         ///     Example:
-        ///     action MiihauEventHelper_CustomEmote Abigail LooseSprites\Cursors 0 0 10 9
+        ///     action MiihauEventHelper_CustomEmote Abigail Characters\\Emily 1 4 15 13 12
         /// </summary>
         private bool ShowCustomEmote(string[] args, TriggerActionContext context, out string error)
         {

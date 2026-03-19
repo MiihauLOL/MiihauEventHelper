@@ -127,6 +127,11 @@ namespace MiihauEventHelper
 
         private Vector2 GetBubbleScreenPosition()
         {
+            //Vector2 pos = this.actor.getLocalPosition(Game1.viewport);
+            //pos.Y -= 96f;
+            //pos.Y += YOffset;
+            //pos.X += (this.actor.Sprite.SourceRect.Width * 4f) / 2f - 32f;
+            //return pos;
             Rectangle bounds = this.actor.GetBoundingBox();
             float x = bounds.Center.X - Game1.viewport.X - (BubbleFrameSize * BubbleScale / 2f);
             float y = bounds.Top - Game1.viewport.Y - (BubbleFrameSize * BubbleScale) - 96f + YOffset;
