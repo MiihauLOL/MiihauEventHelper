@@ -1,10 +1,16 @@
 {
   "Name": "Miihau Event Helper",
   "Author": "Miihau",
-  "Version": "0.0.5",
-  "Description": "Adds custom event commands for firefly effects.",
+  "Version": "0.67.1",
+  "Description": "Adds custom event commands for firefly effects. and more, like checking for map actions and warps",
   "UniqueID": "MiihauEventHelper",
   "EntryDll": "MiihauEventHelper.dll",
   "MinimumApiVersion": "4.0.0",
-  "UpdateKeys": ["Nexus:43517"]
+  "Dependencies": [
+    {
+      "UniqueID": "Pathoschild.ContentPatcher",
+      "IsRequired": false
+    }
+  ],
+  "UpdateKeys": [ "Nexus:43517" ]
 }

@@ -28,8 +28,21 @@ namespace MiihauEventHelper
             TriggerActionManager.RegisterAction($"{this.ModManifest.UniqueID}_RemoveFireFly", this.RemoveFireflyLight);
             TriggerActionManager.RegisterAction($"{this.ModManifest.UniqueID}_CustomEmote", this.ShowCustomEmote);
 
+            helper.Events.GameLoop.GameLaunched += this.OnGameLaunched;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.Display.RenderedWorld += this.OnRenderedWorld;
+        }
+
+        private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
+        {
+            var contentPatcher = this.Helper.ModRegistry.GetApi<IContentPatcherAPI>("Pathoschild.ContentPatcher");
+            if (contentPatcher == null)
+                return;
+
+            contentPatcher.RegisterToken(this.ModManifest, "HasWarp", new MapCheckToken(MapCheckType.Warp));
+            contentPatcher.RegisterToken(this.ModManifest, "HasAction", new MapCheckToken(MapCheckType.Action));
+            contentPatcher.RegisterToken(this.ModManifest, "HasTouchAction", new MapCheckToken(MapCheckType.TouchAction));
+            contentPatcher.RegisterToken(this.ModManifest, "HasTileProperty", new MapCheckToken(MapCheckType.TileProperty));
         }
 
         /// <summary>
